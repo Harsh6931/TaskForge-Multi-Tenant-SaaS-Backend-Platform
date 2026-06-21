@@ -28,7 +28,7 @@ Rules:
 
 ---
 
-## Phase 0 — Setup & Planning
+## Phase 0 — Setup & Planning (Done)
 
 1. 🧠 Decide multi-tenancy strategy and write a 3–5 sentence justification in `ARCHITECTURE.md` (shared schema + RLS vs. schema-per-tenant vs. db-per-tenant). Do this BEFORE prompting any agent — this is the single most-asked interview question about this project.
 2. 🧠 Sketch the ERD by hand or in any tool (Excalidraw, draw.io) — even rough. Save as `erd.png` in `/docs`.
