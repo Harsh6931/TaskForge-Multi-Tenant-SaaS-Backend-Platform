@@ -1,0 +1,5 @@
+# Flyway migration files go here.
+# Naming convention: V{version}__{description}.sql
+# Example: V1__create_tenants_and_users.sql
+#
+# Phase 1 will add the full schema migrations matching SCHEMA.md exactly.

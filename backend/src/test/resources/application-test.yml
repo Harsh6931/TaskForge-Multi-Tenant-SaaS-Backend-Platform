@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/taskforge_test
+    username: taskforge
+    password: taskforge
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false   # Testcontainers manages the schema in integration tests

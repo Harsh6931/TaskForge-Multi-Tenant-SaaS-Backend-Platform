@@ -1,0 +1,125 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TaskForge — Local Development Docker Compose
+# Usage: docker-compose up --build
+# ─────────────────────────────────────────────────────────────────────────────
+version: "3.9"
+
+x-common-env: &common-env
+  TZ: UTC
+
+services:
+  # ── PostgreSQL 16 with pgvector ────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: taskforge-postgres
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      POSTGRES_DB: taskforge
+      POSTGRES_USER: taskforge
+      POSTGRES_PASSWORD: taskforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskforge -d taskforge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Redis 7 (cache · rate-limit · pub/sub) ─────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: taskforge-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Spring Boot Backend ────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: taskforge-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *common-env
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: taskforge
+      DB_USER: taskforge
+      DB_PASSWORD: taskforge
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: local-dev-jwt-secret-change-in-prod
+      INTERNAL_SERVICE_TOKEN: internal-dev-token
+      AI_SERVICE_URL: http://ai-service:8000
+      STRIPE_SECRET_KEY: sk_test_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_placeholder
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── FastAPI AI Service ─────────────────────────────────────────────────────
+  ai-service:
+    build:
+      context: ../ai-service
+      dockerfile: Dockerfile
+    container_name: taskforge-ai-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://taskforge:taskforge@postgres:5432/taskforge
+      INTERNAL_SERVICE_TOKEN: internal-dev-token
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-sk-ant-placeholder}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Vite / React Frontend (dev mode) ──────────────────────────────────────
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: taskforge-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    environment:
+      <<: *common-env
+
+volumes:
+  postgres_data:
+  redis_data:
