@@ -1,36 +1,42 @@
+# Central configuration file for Spring boot application.
+#wires together PostgreSQL, Flyway, Redis, JWT auth, Stripe, and your AI microservice.
 spring:
   application:
     name: taskforge-backend
 
-  datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:taskforge}
-    username: ${DB_USER:taskforge}
-    password: ${DB_PASSWORD:taskforge}
+  datasource:                           # Spring connect to PostgreSQL database
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:taskforge} # use JDBC env var , if not then local var
+    username: postgres
+    password: 1234  # never hardcorde credentials (so no deafult password in production!)
     driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 20
+    hikari:                            # springboot use HikariCP for connection pool
+      maximum-pool-size: 20            # prevent stale,idle DB connection
       minimum-idle: 5
       connection-timeout: 30000
       idle-timeout: 600000
       max-lifetime: 1800000
 
   jpa:
-    hibernate:
-      ddl-auto: validate   # Flyway owns the schema; Hibernate only validates
-    show-sql: false
+    hibernate:                         # usually hibernate auto create/update table (not used like this in here)
+      ddl-auto: validate               # because Flyway owns the schema changes ; Hibernate only validates/checks not create/update etc
+    show-sql: false                    # true for testing, false for production
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect   # generate postgre specific SQL
         format_sql: true
         default_schema: public
 
   flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: true
+    enabled: true                         # allow flyway manage DB migrations
+    locations: classpath:db/migration     # all migrations files Version eg(V1,V2 etc) stored here
+    # TaskForge starts from a clean, Flyway-owned schema. Enabling baselining here
+    # could mark V1 as already applied and skip it on a non-empty schema.
+    baseline-on-migrate: false            # start from scratch & match with migration_history
+    validate-on-migrate: true             # Fail fast if a previously-applied migration file was edited (checksum mismatch)
+    out-of-order: false                   # Reject migrations with lower version numbers than already-applied ones (eg V1,V2,V5 there and now add V3; reject it)
 
   data:
-    redis:
+    redis:                                # for catching,rate-limiting,pub/sub,notifications
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       timeout: 2000ms
@@ -45,7 +51,7 @@ server:
   servlet:
     context-path: /
   error:
-    include-message: always
+    include-message: always                 #Validation errors returned to client.
     include-binding-errors: always
 
 management:
@@ -60,20 +66,20 @@ management:
 # ── Application-level config ──────────────────────────────────────────────────
 app:
   jwt:
-    secret: ${JWT_SECRET:change-me-in-production-use-a-long-random-string}
-    access-token-expiry-ms: 900000        # 15 minutes
-    refresh-token-expiry-ms: 604800000    # 7 days
+    secret: ${JWT_SECRET:change-me-in-production-use-a-long-random-string}       # Used to signIn JWT; never expose real one
+    access-token-expiry-ms: 900000        # 15 minutes ; obtain new token
+    refresh-token-expiry-ms: 604800000    # 7 days  ; expires in
 
-  internal-service-token: ${INTERNAL_SERVICE_TOKEN:internal-dev-token}
+  internal-service-token: ${INTERNAL_SERVICE_TOKEN:internal-dev-token}     # backend-> AI communication
 
-  stripe:
+  stripe:                                  # For SaaS billing
     secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder}
     webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
 
   ai-service:
     base-url: ${AI_SERVICE_URL:http://localhost:8000}
 
-logging:
+logging:                          # logs
   level:
     com.taskforge: DEBUG
     org.springframework.security: INFO

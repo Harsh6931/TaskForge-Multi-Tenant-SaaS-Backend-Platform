@@ -519,6 +519,647 @@ Flyway runs them automatically.
 * Consistent environments
 
 ---
+# Flyway Database Migrations
+
+---
+
+## Interview Question
+
+### What is Flyway?
+
+### Why use Flyway instead of manually running SQL scripts?
+
+### Why is Flyway often called "Git for Databases"?
+
+### What is `flyway_schema_history`?
+
+### What happens if an already executed migration is modified?
+
+### How does Flyway handle multiple developers creating migrations at the same time?
+
+---
+
+# Interview Answer
+
+Flyway is a database migration tool that manages schema changes through version-controlled SQL files. It ensures every environment applies database changes in the same order and keeps track of executed migrations using the `flyway_schema_history` table.
+
+I think of Flyway as Git for the database. Instead of code commits, we create migration files that represent permanent database history.
+
+Once a migration has been executed, it should never be modified. Any future changes must be introduced through a new migration.
+
+---
+
+# Core Problem Flyway Solves
+
+Imagine TaskForge has:
+
+```text
+Developer A
+Developer B
+Staging
+Production
+```
+
+All four databases must have exactly the same schema.
+
+Without Flyway:
+
+```text
+Developer A
+↓
+Runs SQL manually
+
+Developer B
+↓
+Forgets one SQL command
+
+Production
+↓
+Missing column
+
+Result
+↓
+Application crashes
+```
+
+The problem is not writing SQL.
+
+The problem is keeping every database synchronized forever.
+
+That is what Flyway solves.
+
+---
+
+# Mental Model
+
+## Flyway = Git For Databases
+
+Git tracks:
+
+```text
+Commit 1
+↓
+Commit 2
+↓
+Commit 3
+```
+
+Flyway tracks:
+
+```text
+Migration 1
+↓
+Migration 2
+↓
+Migration 3
+```
+
+Git remembers:
+
+```text
+Code History
+```
+
+Flyway remembers:
+
+```text
+Database History
+```
+
+Git commits should not be rewritten after they become shared history.
+
+Similarly:
+
+```text
+Executed Flyway Migrations
+```
+
+should never be edited.
+
+---
+
+# How Flyway Works
+
+Migration Folder:
+
+```text
+db/migration
+
+V1__create_tenants.sql
+V2__create_users.sql
+V3__create_projects.sql
+```
+
+Application Startup:
+
+```text
+Spring Boot Starts
+        ↓
+Connects To PostgreSQL
+        ↓
+Flyway Starts
+        ↓
+Checks Migration History
+        ↓
+Runs Missing Migrations
+        ↓
+JPA/Hibernate Starts
+        ↓
+Application Ready
+```
+
+Important:
+
+Flyway runs BEFORE JPA.
+
+Why?
+
+Because JPA expects tables to already exist.
+
+Without migrations:
+
+```text
+JPA Starts
+↓
+Table Missing
+↓
+Application Failure
+```
+
+---
+
+# Migration Naming Convention
+
+Format:
+
+```text
+V{version}__{description}.sql
+```
+
+Examples:
+
+```text
+V1__create_tenants.sql
+V2__create_users.sql
+V3__create_projects.sql
+```
+
+Rules:
+
+```text
+Version Must Be Unique
+Double Underscore Required
+Version Order Matters
+```
+
+---
+
+# What Is flyway_schema_history?
+
+Flyway automatically creates:
+
+```sql
+flyway_schema_history
+```
+
+Think of it as Flyway's notebook.
+
+Example:
+
+| Version | Description     |
+| ------- | --------------- |
+| 1       | create_tenants  |
+| 2       | create_users    |
+| 3       | create_projects |
+
+Flyway checks this table during every startup.
+
+If version already exists:
+
+```text
+Skip
+```
+
+If version missing:
+
+```text
+Execute Migration
+```
+
+---
+
+# Scenario Visualization
+
+## First Project Startup
+
+Database:
+
+```text
+Empty
+```
+
+Migration Folder:
+
+```text
+V1
+V2
+V3
+```
+
+Startup:
+
+```text
+Flyway
+↓
+Run V1
+↓
+Run V2
+↓
+Run V3
+```
+
+History Table:
+
+```text
+V1
+V2
+V3
+```
+
+Database is ready.
+
+---
+
+## Future Startup
+
+History Table:
+
+```text
+V1
+V2
+V3
+```
+
+Migration Folder:
+
+```text
+V1
+V2
+V3
+V4
+```
+
+Startup:
+
+```text
+Flyway
+↓
+V1 Already Applied
+↓
+V2 Already Applied
+↓
+V3 Already Applied
+↓
+Run V4
+```
+
+Only V4 executes.
+
+---
+
+# Checksums And Immutable History
+
+When Flyway executes a migration:
+
+```text
+V1__create_tenants.sql
+```
+
+it stores:
+
+```text
+Version
+Description
+Checksum
+```
+
+Checksum = file fingerprint.
+
+Example:
+
+```text
+Original File
+↓
+Checksum ABC123
+```
+
+Later:
+
+```text
+Developer Edits V1
+↓
+Checksum XYZ999
+```
+
+Flyway detects:
+
+```text
+History Changed
+```
+
+and startup fails.
+
+---
+
+# Why Old Migrations Must Never Be Edited
+
+Bad:
+
+```text
+V1 Applied
+↓
+Need New Column
+↓
+Edit V1
+```
+
+Result:
+
+```text
+Checksum Mismatch
+Application Fails
+```
+
+Good:
+
+```text
+V1 Applied
+↓
+Need New Column
+↓
+Create V2
+```
+
+Example:
+
+```sql
+ALTER TABLE tenants
+ADD COLUMN slug VARCHAR(255);
+```
+
+stored inside:
+
+```text
+V2__add_slug.sql
+```
+
+History remains intact.
+
+---
+
+# Multi-Developer Scenario
+
+Current State:
+
+```text
+V7 Applied
+```
+
+Developer A creates:
+
+```text
+V8__add_due_date.sql
+```
+
+Developer B creates:
+
+```text
+V8__add_priority.sql
+```
+
+Repository Now Contains:
+
+```text
+V8__add_due_date.sql
+V8__add_priority.sql
+```
+
+Flyway Startup:
+
+```text
+Duplicate Version Detected
+↓
+Validation Failure
+```
+
+Application refuses to start.
+
+---
+
+# How Teams Resolve This
+
+Developer B rebases.
+
+Sees:
+
+```text
+V8 Already Exists
+```
+
+Renames:
+
+```text
+V9__add_priority.sql
+```
+
+Final Order:
+
+```text
+V8
+↓
+V9
+```
+
+Everything works.
+
+---
+
+# Failure Scenario
+
+## Without Flyway
+
+```text
+Developer A
+↓
+Adds Column
+
+Developer B
+↓
+Never Runs SQL
+
+Production
+↓
+Old Schema
+
+Application
+↓
+Unexpected Errors
+```
+
+Every environment slowly becomes different.
+
+---
+
+## Without Checksums
+
+```text
+Migration Executed
+↓
+Developer Modifies History
+↓
+Database State Becomes Unclear
+↓
+Deployment Risks Increase
+```
+
+Nobody knows which schema version is correct.
+
+---
+
+# Real World Analogy
+
+Imagine a building under construction.
+
+Every change must be recorded in the official blueprint.
+
+Bad:
+
+```text
+Erase Old Blueprint
+Draw New One
+```
+
+Nobody knows what happened.
+
+Good:
+
+```text
+Blueprint Version 1
+↓
+Blueprint Version 2
+↓
+Blueprint Version 3
+```
+
+Every change is documented.
+
+Flyway migrations are those blueprint revisions.
+
+---
+
+# Interview Follow-Up Questions
+
+### Why not manually run SQL?
+
+Human error causes databases to drift apart.
+
+---
+
+### Why is Flyway called Git for Databases?
+
+Because migrations create a permanent version-controlled history of schema changes.
+
+---
+
+### What does flyway_schema_history do?
+
+Tracks executed migrations and their checksums.
+
+---
+
+### Why does Flyway run before JPA?
+
+Because tables must exist before entities can be mapped.
+
+---
+
+### What happens if V1 is modified?
+
+Checksum validation fails and application startup stops.
+
+---
+
+### What happens if two developers create V8?
+
+Flyway detects duplicate versions and refuses to run until versions are resolved.
+
+---
+
+### Why create a new migration instead of editing an old one?
+
+Database history must remain immutable.
+
+---
+
+# One-Line Interview Answer
+
+Flyway is a database migration tool that version-controls schema changes, tracks migration history, and guarantees every environment evolves through the same sequence of database changes.
+
+---
+
+# Implementation Notes (TaskForge)
+
+Purpose:
+
+```text
+Manage all database schema changes as code.
+```
+
+Migration Folder:
+
+```text
+backend/src/main/resources/db/migration
+```
+
+Configuration:
+
+```yaml
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+```
+
+History Table:
+
+```text
+flyway_schema_history
+```
+
+Migration Format:
+
+```text
+V{version}__{description}.sql
+```
+
+Example:
+
+```text
+V1__create_tenants.sql
+V2__create_users.sql
+V3__create_projects.sql
+```
+
+Golden Rule:
+
+```text
+Flyway is Git for the database.
+
+Once a migration becomes history,
+never modify it.
+Create a new migration instead.
+```
+
 
 ## Q15. What Is Soft Delete?
 
@@ -568,6 +1209,9 @@ Can Recover
 ```
 
 ---
+## Q: Why use ddl-auto=validate instead of update?
+In production systems, schema changes should be controlled and versioned through migration tools like Flyway. Using ddl-auto=update allows Hibernate to modify the database automatically, which can create unpredictable schema changes. By setting ddl-auto=validate, Hibernate only verifies that the schema matches the entities, while Flyway remains the single source of truth for database evolution. This makes deployments safer and more reproducible.
+
 
 ## Q17. Most Important Phase 1 Test
 
