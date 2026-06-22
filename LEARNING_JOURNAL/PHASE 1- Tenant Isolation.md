@@ -1213,6 +1213,614 @@ Can Recover
 In production systems, schema changes should be controlled and versioned through migration tools like Flyway. Using ddl-auto=update allows Hibernate to modify the database automatically, which can create unpredictable schema changes. By setting ddl-auto=validate, Hibernate only verifies that the schema matches the entities, while Flyway remains the single source of truth for database evolution. This makes deployments safer and more reproducible.
 
 
+# Goal 1 — Backend Infrastructure Setup & Flyway Verification
+
+---
+
+# Q1. Why Do We Use Maven?
+
+## Interview Answer
+
+Maven is a build automation and dependency management tool for Java projects.
+
+It manages:
+
+* Project dependencies
+* Compilation
+* Testing
+* Packaging
+* Build lifecycle
+
+---
+
+## Scenario Visualization
+
+Without Maven:
+
+```text
+Need Spring Boot
+Need PostgreSQL Driver
+Need Flyway
+Need JUnit
+Need Security
+
+Download everything manually.
+```
+
+With Maven:
+
+```text
+pom.xml
+     ↓
+mvn clean install
+     ↓
+Everything downloaded automatically
+```
+
+---
+
+# Q2. What Happens During mvn clean install?
+
+## Interview Answer
+
+Maven executes its build lifecycle.
+
+### Visualization
+
+```text
+clean
+   ↓
+compile
+   ↓
+test
+   ↓
+package
+   ↓
+install
+```
+
+---
+
+## Real Project Example
+
+When TaskForge executed:
+
+```bash
+mvn clean install
+```
+
+Maven:
+
+```text
+Read pom.xml
+↓
+Downloaded Dependencies
+↓
+Compiled Source Code
+↓
+Executed Tests
+↓
+Created JAR File
+↓
+Stored Artifact Locally
+```
+
+Result:
+
+```text
+BUILD SUCCESS
+```
+
+---
+
+# Q3. What Is pom.xml?
+
+## Interview Answer
+
+pom.xml is the central configuration file of a Maven project.
+
+Think of it as:
+
+```text
+Blueprint Of The Project
+```
+
+---
+
+## It Contains
+
+```text
+Dependencies
+Plugins
+Java Version
+Build Configuration
+Project Metadata
+```
+
+---
+
+## Visualization
+
+```text
+pom.xml
+│
+├── Spring Boot
+├── PostgreSQL
+├── Flyway
+├── Security
+├── Redis
+└── TestContainers
+```
+
+---
+
+# Q4. Why Did Maven Fail When A Dependency Version Was Missing?
+
+## Scenario
+
+```xml
+<dependency>
+    <groupId>org.flywaydb</groupId>
+    <artifactId>flyway-database-postgresql</artifactId>
+</dependency>
+```
+
+No version specified.
+
+---
+
+## Result
+
+```text
+Maven
+↓
+Needs Version
+↓
+Cannot Resolve Dependency
+↓
+Build Failure
+```
+
+---
+
+## Learning
+
+A dependency must either:
+
+```text
+Provide Explicit Version
+```
+
+or
+
+```text
+Be Managed By Parent BOM
+```
+
+---
+
+# Q5. What Is JDBC?
+
+## Interview Answer
+
+JDBC is the standard Java API used to communicate with databases.
+
+---
+
+## Visualization
+
+```text
+Spring Boot
+      ↓
+JDBC Driver
+      ↓
+PostgreSQL
+```
+
+Without JDBC:
+
+```text
+Java Cannot Talk To Database
+```
+
+---
+
+# Q6. What Is A Datasource?
+
+## Interview Answer
+
+Datasource is the configuration object responsible for creating database connections.
+
+---
+
+## Visualization
+
+```text
+application.yml
+      ↓
+Datasource
+      ↓
+PostgreSQL Connection
+```
+
+Example:
+
+```yaml
+url:
+username:
+password:
+```
+
+All three are required.
+
+---
+
+# Q7. What Is HikariCP?
+
+## Interview Answer
+
+HikariCP is Spring Boot's default database connection pool.
+
+---
+
+## Real Startup Log
+
+```text
+HikariPool-1 - Starting...
+HikariPool-1 - Start completed.
+```
+
+---
+
+## Visualization
+
+Without Pool:
+
+```text
+Request
+↓
+Open Connection
+↓
+Query
+↓
+Close Connection
+```
+
+With Pool:
+
+```text
+Request
+↓
+Reuse Existing Connection
+↓
+Query
+```
+
+---
+
+# Q8. Why Did PostgreSQL Authentication Fail Initially?
+
+## Scenario
+
+Spring Config:
+
+```yaml
+username: taskforge
+password: taskforge
+```
+
+Actual Database User:
+
+```text
+postgres
+```
+
+---
+
+## Result
+
+```text
+Authentication Failed
+```
+
+---
+
+## Visualization
+
+```text
+Spring Boot
+      ↓
+Login PostgreSQL
+      ↓
+Wrong Credentials
+      ↓
+Connection Refused
+```
+
+---
+
+## Learning
+
+Before debugging code:
+
+Verify:
+
+```text
+Host
+Port
+Database
+Username
+Password
+```
+
+---
+
+# Q9. Why Did mvn spring-boot:run Fail Initially?
+
+## Scenario
+
+Command Executed From:
+
+```text
+TaskForge/
+```
+
+instead of
+
+```text
+TaskForge/backend/
+```
+
+---
+
+## Result
+
+```text
+No plugin found for prefix 'spring-boot'
+```
+
+---
+
+## Visualization
+
+```text
+Current Directory
+        ↓
+Find pom.xml
+        ↓
+Run Build
+```
+
+Wrong Directory:
+
+```text
+No pom.xml
+      ↓
+Build Failure
+```
+
+---
+
+# Q10. Explain Complete Spring Boot Startup Flow
+
+## Interview Answer
+
+Spring Boot initializes infrastructure components before accepting requests.
+
+---
+
+## Actual TaskForge Startup Flow
+
+```text
+Application Start
+       ↓
+Read application.yml
+       ↓
+Create Datasource
+       ↓
+Start HikariCP
+       ↓
+Connect PostgreSQL
+       ↓
+Run Flyway
+       ↓
+Validate Schema
+       ↓
+Initialize Hibernate
+       ↓
+Initialize Security
+       ↓
+Start Tomcat
+       ↓
+Port 8080 Ready
+```
+
+---
+
+# Q11. How Do You Verify Flyway Is Working?
+
+## Real Startup Logs
+
+```text
+Successfully validated 1 migration
+```
+
+```text
+Current version of schema "public": 1
+```
+
+```text
+Schema "public" is up to date
+```
+
+---
+
+## Interpretation
+
+```text
+Migration Found
+      ↓
+Migration Previously Executed
+      ↓
+Checksum Valid
+      ↓
+Database State Correct
+```
+
+---
+
+# Q12. Why Can't We Edit V1 After Execution?
+
+## Scenario
+
+Database Contains
+
+```text
+Version 1
+```
+
+inside:
+
+```text
+flyway_schema_history
+```
+
+---
+
+## If V1 Changes
+
+```text
+Stored Checksum
+      ≠
+Current Checksum
+```
+
+Result:
+
+```text
+Flyway Validation Failure
+```
+
+---
+
+## Correct Approach
+
+```text
+V1
+↓
+V2
+↓
+V3
+```
+
+Never:
+
+```text
+Modify V1
+```
+
+---
+
+# Most Important Things To Remember
+
+## Mental Model #1
+
+```text
+Spring Boot
+      ↓
+Datasource
+      ↓
+PostgreSQL
+      ↓
+Flyway
+      ↓
+Hibernate
+      ↓
+Security
+      ↓
+Tomcat
+```
+
+Everything depends on successful datasource creation.
+
+---
+
+## Mental Model #2
+
+```text
+Flyway
+=
+Git For Database
+```
+
+Migration History:
+
+```text
+V1
+V2
+V3
+```
+
+should be treated like:
+
+```text
+Git Commit History
+```
+
+Immutable.
+
+---
+
+## Mental Model #3
+
+Debugging Hierarchy
+
+```text
+Machine Problem
+      ↓
+Configuration Problem
+      ↓
+Application Problem
+```
+
+Examples:
+
+```text
+mvn not found
+→ Machine Problem
+
+Wrong DB Password
+→ Configuration Problem
+
+Business Logic Bug
+→ Application Problem
+```
+
+Always identify the layer before fixing the issue.
+
+---
+
+# Goal 1 Summary
+
+Successfully Verified:
+
+```text
+✓ Java Runtime
+✓ Maven Setup
+✓ PostgreSQL Connectivity
+✓ Spring Boot Build
+✓ Datasource Configuration
+✓ HikariCP Connection Pool
+✓ Flyway Integration
+✓ Migration Validation
+✓ Hibernate Startup
+✓ Security Startup
+✓ Embedded Tomcat Startup
+✓ Backend Running On Port 8080
+```
+
+
+
 ## Q17. Most Important Phase 1 Test
 
 ### Scenario
