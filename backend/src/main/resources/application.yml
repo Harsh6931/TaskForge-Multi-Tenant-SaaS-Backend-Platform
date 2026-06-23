@@ -6,8 +6,11 @@ spring:
 
   datasource:                           # Spring connect to PostgreSQL database
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:taskforge} # use JDBC env var , if not then local var
-    username: postgres
-    password: 1234  # never hardcorde credentials (so no deafult password in production!)
+
+    #username: postgres
+    #password: 1234  # never hardcorde credentials (so no deafult password in production!)
+    username: ${DB_USER:taskforge}
+    password: ${DB_PASSWORD:taskforge}  # never hardcorde credentials (so no deafult password in production!)
     driver-class-name: org.postgresql.Driver
     hikari:                            # springboot use HikariCP for connection pool
       maximum-pool-size: 20            # prevent stale,idle DB connection

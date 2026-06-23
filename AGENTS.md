@@ -25,7 +25,7 @@ Rules:
 ```
 
 🧠 Read the above block, understand every line, then paste it into your agent's persistent rules/workspace config before starting Phase 0.
-
+....
 ---
 
 ## Phase 0 — Setup & Planning (Done)

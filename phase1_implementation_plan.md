@@ -1,7 +1,7 @@
 # Phase 1 — Tenant Isolation & Core Infrastructure
 ### Implementation Breakdown (Small Learning Goals)
 
-> **Current state:** Phase 0 complete. Goal 1's Flyway configuration and smoke migration are implemented. Runtime verification still requires Docker/PostgreSQL on the local machine. No domain schema yet.
+> **Current state:** Phase 0 and Phase 1 Goals 1–2 complete. Flyway is verified and the exact core schema is represented by migrations V1–V6. RLS is not enabled yet.
 >
 > **Phase 1 Goal:** Rock-solid multi-tenant foundation — every table has `tenant_id`, RLS enforces isolation at the DB layer, and a Spring filter injects the tenant context per request.
 
@@ -35,7 +35,7 @@ Goal 7 → Write the RLS isolation integration test (the proof)
 - [x] Confirm `spring.flyway.enabled=true` and the migration path is `classpath:db/migration`
 - [x] Add validation settings so changed or out-of-order migrations fail fast
 - [x] Create a throwaway `V1__smoke_test.sql` migration that creates and seeds `flyway_smoke_test`
-- [ ] Run the stack and verify `flyway_smoke_test` and `flyway_schema_history` in PostgreSQL
+- [x] Run the stack and verify `flyway_smoke_test` and `flyway_schema_history` in PostgreSQL
 
 ### Files touched
 - `backend/src/main/resources/application.yml`
@@ -68,12 +68,12 @@ Before writing SQL, re-read each table and answer these questions yourself:
 | `V6__create_ai_tables.sql` | `task_embeddings` | AI layer (needs pgvector) |
 
 ### What to build
-- [ ] `V1__create_tenants_and_users.sql` — tenants, users (with `password_hash`), tenant_users with role ENUM
-- [ ] `V2__create_projects_and_tasks.sql` — projects, tasks (with `status` ENUM, `priority` ENUM, `version INT DEFAULT 0`), comments, labels, task_labels
-- [ ] `V3__create_billing.sql` — plans, subscriptions (with `status` ENUM), usage_records (with `metric` ENUM)
-- [ ] `V4__create_auth_and_keys.sql` — refresh_tokens, api_keys
-- [ ] `V5__create_audit_and_notifications.sql` — audit_logs (`metadata JSONB`), notifications (`payload JSONB`)
-- [ ] `V6__create_ai_tables.sql` — enable pgvector extension, create task_embeddings with `embedding vector(1536)`
+- [x] `V1__create_tenants_and_users.sql` — tenants, users (with `password_hash`), tenant_users with role ENUM
+- [x] `V2__create_projects_and_tasks.sql` — projects, tasks (with `status` ENUM, `priority` ENUM, `version INT DEFAULT 0`), comments, labels, task_labels
+- [x] `V3__create_billing.sql` — plans, subscriptions (with `status` ENUM), usage_records (with `metric` ENUM)
+- [x] `V4__create_auth_and_keys.sql` — refresh_tokens, api_keys
+- [x] `V5__create_audit_and_notifications.sql` — audit_logs (`metadata JSONB`), notifications (`payload JSONB`)
+- [x] `V6__create_ai_tables.sql` — enable pgvector extension, create task_embeddings with `embedding vector(1536)`
 
 ### Key SQL patterns to use in every table
 
@@ -308,8 +308,8 @@ public abstract class BaseEntity {
 
 | Goal | Description | Status |
 |---|---|---|
-| Goal 1 | Flyway understood + smoke test migration | Implemented; runtime verification pending |
-| Goal 2 | All 6 schema migrations written + verified in psql | ⬜ |
+| Goal 1 | Flyway understood + smoke test migration | ✅ |
+| Goal 2 | All 6 schema migrations written + verified in psql | Implemented; database verification pending |
 | Goal 3 | RLS enabled on all tenant-scoped tables | ⬜ |
 | Goal 4 | TenantContextHolder + TenantFilter wired up | ⬜ |
 | Goal 5 | JPA entities for Tenant, User, TenantUser, Project | ⬜ |
