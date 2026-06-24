@@ -1,7 +1,7 @@
 # Phase 1 — Tenant Isolation & Core Infrastructure
 ### Implementation Breakdown (Small Learning Goals)
 
-> **Current state:** Phase 0 and Phase 1 Goals 1–2 complete. Flyway is verified and the exact core schema is represented by migrations V1–V6. RLS is not enabled yet.
+> **Current state:** Phase 0 and Phase 1 Goals 1–4 complete. Flyway migrations V1–V7 run clean. RLS is enabled on all 12 tenant-scoped tables. TenantContextHolder, TenantFilter, TenantConnectionInterceptor, TenantConfig, and SecurityConfig are wired up.
 >
 > **Phase 1 Goal:** Rock-solid multi-tenant foundation — every table has `tenant_id`, RLS enforces isolation at the DB layer, and a Spring filter injects the tenant context per request.
 
@@ -135,9 +135,9 @@ CREATE POLICY tenant_isolation_policy ON projects
 > `FORCE ROW LEVEL SECURITY` — applies RLS even to the superuser/table owner. Without this, the app DB user (if it's the owner) would bypass RLS.
 
 ### What to build
-- [ ] `V7__enable_rls.sql` — enable RLS + create `tenant_isolation_policy` on: `projects`, `tasks`, `comments`, `labels`, `task_labels`, `subscriptions`, `usage_records`, `audit_logs`, `api_keys`, `notifications`, `task_embeddings`, `tenant_users`
-- [ ] Note: `tenants`, `users`, `plans` are NOT tenant-scoped (they're global) — no RLS needed
-- [ ] Note: `refresh_tokens` is user-scoped, not tenant-scoped — skip RLS or apply user-based policy
+- [x] `V7__enable_rls.sql` — enable RLS + create `tenant_isolation_policy` on: `projects`, `tasks`, `comments`, `labels`, `task_labels`, `subscriptions`, `usage_records`, `audit_logs`, `api_keys`, `notifications`, `task_embeddings`, `tenant_users`
+- [x] Note: `tenants`, `users`, `plans` are NOT tenant-scoped (they're global) — no RLS needed
+- [x] Note: `refresh_tokens` is user-scoped, not tenant-scoped — skip RLS or apply user-based policy
 
 ### Files to create
 - `db/migration/V7__enable_rls.sql`
@@ -172,23 +172,23 @@ HTTP Request
 ### What to build
 
 #### 4a — TenantContextHolder
-- [ ] Create `com.taskforge.tenant.TenantContextHolder` — a simple `ThreadLocal<UUID>` wrapper
-- [ ] Methods: `setTenantId(UUID)`, `getTenantId()`, `clear()`
-- [ ] Learn: Why ThreadLocal? Because each HTTP request runs on its own thread. The tenant ID must not bleed between requests.
+- [x] Create `com.taskforge.tenant.TenantContextHolder` — uses `InheritableThreadLocal<UUID>` (inherits to @Async children)
+- [x] Methods: `setTenantId(UUID)`, `getTenantId()`, `clear()`
+- [x] Learn: Why ThreadLocal? Because each HTTP request runs on its own thread. The tenant ID must not bleed between requests.
 
 #### 4b — TenantFilter
-- [ ] Create `com.taskforge.tenant.TenantFilter extends OncePerRequestFilter`
-- [ ] In `doFilterInternal`:
+- [x] Create `com.taskforge.tenant.TenantFilter extends OncePerRequestFilter`
+- [x] In `doFilterInternal`:
   1. Read tenant ID from request header `X-Tenant-ID` (placeholder — Phase 2 will read from JWT)
   2. Call `TenantContextHolder.setTenantId(uuid)`
   3. Continue filter chain
   4. In `finally` block: `TenantContextHolder.clear()` ← **critical**, prevents thread-pool leakage
 
 #### 4c — TenantAwareDataSource (the actual SQL injection)
-- [ ] Create `com.taskforge.tenant.TenantConnectionInterceptor` — intercepts JDBC connection borrowing
-- [ ] Two options (pick option A for now):
-  - **Option A (simpler):** Spring `@TransactionalEventListener` or a `JdbcTemplate` call that runs `SET LOCAL app.current_tenant_id = ?` at the start of each transaction
-  - **Option B (production-grade):** Extend `AbstractRoutingDataSource` or use a Hibernate `ConnectionProvider`
+- [x] Create `com.taskforge.tenant.TenantConnectionInterceptor` — uses JdbcTemplate to run `SET LOCAL app.current_tenant_id = ?`
+- [x] Uses Option A: explicit call at transaction start via `applyTenantContext()`
+  - **Option A (simpler):** `JdbcTemplate.update("SET LOCAL app.current_tenant_id = ?", tenantId)` at start of transaction
+  - **Option B (production-grade):** Extend `AbstractRoutingDataSource` or use a Hibernate `ConnectionProvider` (Phase 8 upgrade)
 
 > For now, use a `@Aspect` around `@Transactional` methods, or a `DataSourceConnectionInterceptor`. The exact pattern can be refined — the key is that BEFORE any SQL runs, the session variable is set.
 
@@ -309,9 +309,9 @@ public abstract class BaseEntity {
 | Goal | Description | Status |
 |---|---|---|
 | Goal 1 | Flyway understood + smoke test migration | ✅ |
-| Goal 2 | All 6 schema migrations written + verified in psql | Implemented; database verification pending |
-| Goal 3 | RLS enabled on all tenant-scoped tables | ⬜ |
-| Goal 4 | TenantContextHolder + TenantFilter wired up | ⬜ |
+| Goal 2 | All 6 schema migrations written + verified in psql | ✅ |
+| Goal 3 | RLS enabled on all tenant-scoped tables | ✅ |
+| Goal 4 | TenantContextHolder + TenantFilter wired up | ✅ |
 | Goal 5 | JPA entities for Tenant, User, TenantUser, Project | ⬜ |
 | Goal 6 | Repositories + soft-delete pattern | ⬜ |
 | Goal 7 | RLS isolation integration test passes ✅ | ⬜ |
