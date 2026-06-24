@@ -1,7 +1,7 @@
 # Phase 1 — Tenant Isolation & Core Infrastructure
 ### Implementation Breakdown (Small Learning Goals)
 
-> **Current state:** Phase 0 and Phase 1 Goals 1–4 complete. Flyway migrations V1–V7 run clean. RLS is enabled on all 12 tenant-scoped tables. TenantContextHolder, TenantFilter, TenantConnectionInterceptor, TenantConfig, and SecurityConfig are wired up.
+> **Current state:** Phase 0 and Phase 1 Goals 1–5 complete. Flyway migrations V1–V7 run clean. RLS enabled. Tenant context stack wired. BaseEntity, Tenant, User, TenantUser, TenantUserRole, Project entities created with @Where soft-delete. JpaConfig activates auditing.
 >
 > **Phase 1 Goal:** Rock-solid multi-tenant foundation — every table has `tenant_id`, RLS enforces isolation at the DB layer, and a Spring filter injects the tenant context per request.
 
@@ -312,7 +312,7 @@ public abstract class BaseEntity {
 | Goal 2 | All 6 schema migrations written + verified in psql | ✅ |
 | Goal 3 | RLS enabled on all tenant-scoped tables | ✅ |
 | Goal 4 | TenantContextHolder + TenantFilter wired up | ✅ |
-| Goal 5 | JPA entities for Tenant, User, TenantUser, Project | ⬜ |
+| Goal 5 | JPA entities for Tenant, User, TenantUser, Project | ✅ |
 | Goal 6 | Repositories + soft-delete pattern | ⬜ |
 | Goal 7 | RLS isolation integration test passes ✅ | ⬜ |
 
