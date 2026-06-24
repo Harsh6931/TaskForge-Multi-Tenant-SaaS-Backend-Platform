@@ -1,0 +1,338 @@
+TaskForgeApplication is the entry point of the Spring Boot application. The @SpringBootApplication annotation enables configuration, component scanning, and auto-configuration. The main() method calls SpringApplication.run(), which creates the Spring Application Context, initializes all beans, loads configuration, starts the embedded Tomcat server, and makes the application ready to accept requests.
+
+
+
+
+
+
+# Phase 1 — TenantContext + Filter + RLS Notes
+
+## Core Idea
+
+PostgreSQL RLS policies use:
+
+```sql
+current_setting('app.current_tenant_id')
+```
+
+to determine which tenant's data can be accessed.
+
+Therefore, before any SQL query executes, the application must set:
+
+```sql
+app.current_tenant_id
+```
+
+for the current database session/transaction.
+
+---
+
+## Request Flow
+
+```text
+HTTP Request
+    ↓
+TenantFilter
+    ↓
+TenantContextHolder
+    ↓
+TenantConnectionInterceptor
+    ↓
+SET LOCAL app.current_tenant_id
+    ↓
+Repository/JPA Query
+    ↓
+PostgreSQL RLS
+    ↓
+Only tenant-specific rows returned
+```
+
+---
+
+## TenantContextHolder
+
+Purpose:
+
+* Stores tenant ID for the current request.
+* Makes tenant information accessible anywhere during request processing.
+
+Implementation:
+
+```java
+private static final InheritableThreadLocal<UUID> TENANT =
+        new InheritableThreadLocal<>();
+```
+
+Methods:
+
+```java
+setTenantId(UUID tenantId)
+getTenantId()
+clear()
+```
+
+---
+
+## Why ThreadLocal?
+
+Each HTTP request is processed on its own thread.
+
+Without ThreadLocal:
+
+```text
+Request A → Tenant A
+Request B → Tenant B
+```
+
+A shared variable could be overwritten, causing tenant data leakage.
+
+ThreadLocal provides:
+
+```text
+Thread 1 → Tenant A
+Thread 2 → Tenant B
+```
+
+Each thread gets its own isolated value.
+
+---
+
+## Why InheritableThreadLocal?
+
+Used instead of ThreadLocal because child threads inherit the tenant context.
+
+Example:
+
+```java
+@Async
+public void sendNotification() {}
+```
+
+Without inheritance:
+
+```text
+Parent Thread → Tenant A
+Child Thread  → null
+```
+
+With InheritableThreadLocal:
+
+```text
+Parent Thread → Tenant A
+Child Thread  → Tenant A
+```
+
+Useful for future async tasks, notifications, emails, and background jobs.
+
+---
+
+## TenantFilter
+
+Extends:
+
+```java
+OncePerRequestFilter
+```
+
+Responsibilities:
+
+1. Read tenant ID from request header:
+
+```http
+X-Tenant-ID
+```
+
+2. Store tenant ID:
+
+```java
+TenantContextHolder.setTenantId(...)
+```
+
+3. Continue request processing:
+
+```java
+filterChain.doFilter(...)
+```
+
+4. Clear context in finally block:
+
+```java
+TenantContextHolder.clear()
+```
+
+---
+
+## Why clear() is Critical?
+
+Application servers use thread pools.
+
+Example:
+
+```text
+Thread 1 handles Tenant A
+```
+
+Later:
+
+```text
+Same Thread 1 handles Tenant B
+```
+
+If ThreadLocal is not cleared:
+
+```text
+Tenant A value remains
+```
+
+This can cause cross-tenant data leaks.
+
+Always execute:
+
+```java
+finally {
+    TenantContextHolder.clear();
+}
+```
+
+---
+
+## TenantConnectionInterceptor
+
+Purpose:
+
+Before any repository query executes:
+
+```sql
+SET LOCAL app.current_tenant_id = '<tenant-id>'
+```
+
+This allows PostgreSQL RLS policies to identify the active tenant.
+
+Flow:
+
+```text
+Read tenant ID from TenantContextHolder
+       ↓
+Set PostgreSQL session variable
+       ↓
+Execute repository query
+       ↓
+RLS automatically filters rows
+```
+
+---
+
+## Why SET LOCAL?
+
+Use:
+
+```sql
+SET LOCAL
+```
+
+instead of:
+
+```sql
+SET
+```
+
+Reason:
+
+```text
+SET LOCAL → only current transaction
+SET       → persists on connection
+```
+
+Since database connections are reused from a connection pool, using plain SET can accidentally leak tenant context between requests.
+
+---
+
+## Transaction Requirement
+
+SET LOCAL only works inside an active transaction.
+
+Correct order:
+
+```text
+Transaction Starts
+      ↓
+SET LOCAL app.current_tenant_id
+      ↓
+Repository Queries
+      ↓
+Transaction Ends
+```
+
+The tenant context must be applied before any SQL executes.
+
+---
+
+## RLS Protection
+
+Repository code:
+
+```java
+projectRepository.findAll();
+```
+
+Generated SQL:
+
+```sql
+SELECT * FROM projects;
+```
+
+Even without:
+
+```sql
+WHERE tenant_id = ?
+```
+
+RLS automatically enforces:
+
+```sql
+tenant_id =
+current_setting('app.current_tenant_id')::uuid
+```
+
+Result:
+
+```text
+Tenant A can never see Tenant B data
+```
+
+even if application code contains a bug or missing WHERE clause.
+
+---
+
+## Interview Points
+
+### Why RLS?
+
+* Security enforced at database layer.
+* Protects against developer mistakes.
+* Prevents accidental cross-tenant data exposure.
+
+### Why ThreadLocal?
+
+* Stores tenant context per request thread.
+* Prevents tenant information from mixing across concurrent requests.
+
+### Why clear()?
+
+* Prevents thread-pool leakage.
+* Avoids one tenant inheriting another tenant's context.
+
+### Why SET LOCAL?
+
+* Automatically removed after transaction completion.
+* Safer with connection pools.
+
+### Biggest Benefit
+
+Even if a developer writes:
+
+```sql
+SELECT * FROM projects;
+```
+
+without a tenant filter, PostgreSQL RLS still guarantees tenant isolation.

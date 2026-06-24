@@ -3,6 +3,8 @@ I designed a multi-tenant schema using PostgreSQL Row-Level Security so tenant d
 
 "TaskForge uses PostgreSQL Row-Level Security in a shared-schema multi-tenant architecture. Every tenant-scoped table contains a tenant_id, and after authentication Spring sets app.current_tenant_id on the database session. PostgreSQL RLS policies automatically filter rows by tenant_id, ensuring tenant isolation even if application code accidentally omits tenant filters."
 
+FORCE ROW LEVEL SECURITY on every table —> even the DB owner can't bypass policies. If removed then he can
+
 # PostgreSQL Row-Level Security (RLS) — Interview Questions & Answers
 
 ## Q1. Why did you choose RLS instead of only filtering by tenant_id in application code?
