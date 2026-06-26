@@ -134,4 +134,21 @@ desktop.ini
 *.p12
 secrets/
 
+# ─── Project Docs / Planning / AI Agent Files ─────────────────────────────────
+AGENTS.md
+ARCHITECTURE.md
+PHASES.md
+API_CONTRACT.md
+SCHEMA.md
+docs/RBAC.md
+docs/AUDIT_POLICY.md
+docs/RATE_LIMITS.md
+docs/ENGINEERING_DECISIONS.md
+docs/erd.png
+implementation_plan.md
+walkthrough.md
+task.md
+METRICS_PLAYBOOK.md
+Project_phase.md
+
 

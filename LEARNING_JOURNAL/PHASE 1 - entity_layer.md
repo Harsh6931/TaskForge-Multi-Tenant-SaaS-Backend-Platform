@@ -263,3 +263,9 @@ Reduces unnecessary database queries.
 ### Why soft delete?
 
 History, recovery, auditability.
+
+
+Two Key Patterns to Internalize
+1. @Where soft-delete — applied to Tenant, User, Project. Every findAll(), findById() etc. automatically appends WHERE deleted_at IS NULL. You never accidentally fetch deleted records.
+
+2. @Getter/@Setter not @Data on entities — Lombok's @Data generates hashCode() based on all fields. JPA proxies are uninitialized stubs, so comparing a proxy to a real entity returns false even if they represent the same row. Sticking to @Getter/@Setter sidesteps this entirely.
