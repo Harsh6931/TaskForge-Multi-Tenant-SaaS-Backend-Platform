@@ -1,10 +1,50 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Test profile — used by all @SpringBootTest tests.
+#
+# Strategy:
+#   Testcontainers spins up a real pgvector/pgvector:pg16 container per test
+#   class (or suite) via @DynamicPropertySource. Flyway IS enabled here so that
+#   all migrations (V1–V7, including the RLS policies) run on the container.
+#   This is the only way to prove that RLS works — Hibernate's create-drop
+#   would never create the RLS policies.
+#
+# Datasource URL:
+#   Overridden at runtime by @DynamicPropertySource in AbstractIntegrationTest.
+#   The placeholder below keeps Spring from failing at context startup before
+#   the container URL is injected.
+# ─────────────────────────────────────────────────────────────────────────────
 spring:
   datasource:
+    # Overridden per-test by @DynamicPropertySource — this value is a fallback
+    # that lets the config parse without errors if the property isn't set yet.
     url: jdbc:postgresql://localhost:5432/taskforge_test
     username: taskforge
     password: taskforge
+
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      # validate: Hibernate checks the schema against entity mappings.
+      # We use Flyway migrations to build the schema, then Hibernate validates it.
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
   flyway:
-    enabled: false   # Testcontainers manages the schema in integration tests
+    # Flyway MUST run in tests so that the RLS policies (V7) are created.
+    # Without V7, the RLS isolation test would not prove anything.
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: false
+
+# Silence noisy logs during tests
+logging:
+  level:
+    com.taskforge: DEBUG
+    org.springframework.security: WARN
+    org.flywaydb: INFO
+    org.testcontainers: INFO
+    com.zaxxer.hikari: WARN

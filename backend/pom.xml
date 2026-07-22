@@ -85,10 +85,11 @@
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>-->
 
-        <!-- ── Lombok ── -->
+<!-- ── Lombok ── -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
+            <version>1.18.46</version>
             <optional>true</optional>
         </dependency>
 
@@ -147,7 +148,7 @@
             <dependency>
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-bom</artifactId>
-                <version>1.19.8</version>
+                <version>1.21.4</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -166,6 +167,45 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- ── Maven Compiler Plugin: explicit Lombok annotation processor ── -->
+            <!-- Required for Java 23+ (Java 24 in our case). Without this explicit   -->
+            <!-- annotationProcessorPaths entry, Lombok 1.18.32+ fails to generate    -->
+            <!-- @Slf4j log fields and @Getter/@Setter on JDK 24.                      -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.46</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
+            <!-- ── Maven Surefire Plugin: Docker env for Testcontainers ── -->
+            <!-- On Windows, Testcontainers' NpipeSocketClientProviderStrategy returns  -->
+            <!-- Status 400 from Docker Desktop's named pipe. Setting DOCKER_HOST here  -->
+            <!-- forces Testcontainers to use Docker Desktop's TCP endpoint instead.    -->
+            <!-- Prerequisite: Docker Desktop → Settings → General →                   -->
+            <!--   ✅ "Expose daemon on tcp://localhost:2375 without TLS"               -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <environmentVariables>
+                        <!-- Docker Desktop 29.x on Windows: the default docker_engine pipe   -->
+                        <!-- returns Status 400 to docker-java. The active Docker Desktop     -->
+                        <!-- context "desktop-linux" uses the dockerDesktopLinuxEngine pipe.   -->
+                        <!-- Discovered via: docker context ls                                -->
+                        <DOCKER_HOST>npipe:////./pipe/dockerDesktopLinuxEngine</DOCKER_HOST>
+                        <TESTCONTAINERS_RYUK_DISABLED>false</TESTCONTAINERS_RYUK_DISABLED>
+                    </environmentVariables>
                 </configuration>
             </plugin>
         </plugins>

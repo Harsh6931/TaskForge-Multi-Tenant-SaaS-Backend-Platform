@@ -145,7 +145,7 @@ docs/AUDIT_POLICY.md
 docs/RATE_LIMITS.md
 docs/ENGINEERING_DECISIONS.md
 docs/erd.png
-implementation_plan.md
+phase1_implementation_plan.md
 walkthrough.md
 task.md
 METRICS_PLAYBOOK.md
