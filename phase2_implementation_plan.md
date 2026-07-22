@@ -687,9 +687,9 @@ public class ApiKeyService {
 |---|---|---|
 | Goal 1 | JWT mental model internalized (no code) | ✅ |
 | Goal 2 | JwtService — token generation + validation | ✅ |
-| Goal 3 | RefreshToken + ApiKey entities + repositories | ⬜ |
-| Goal 4 | AuthService — signup, login, refresh, logout logic | ⬜ |
-| Goal 5 | AuthController — /auth/* REST endpoints | ⬜ |
+| Goal 3 | RefreshToken + ApiKey entities + repositories | ✅ |
+| Goal 4 | AuthService — signup, login, refresh, logout logic | ✅ |
+| Goal 5 | AuthController — /auth/* REST endpoints | ✅ |
 | Goal 6 | JwtAuthenticationFilter — per-request token verification | ⬜ |
 | Goal 7 | SecurityConfig upgraded — JWT rules replace permitAll() | ⬜ |
 | Goal 8 | Tenant-switch endpoint — /auth/switch-tenant/{tenantId} | ⬜ |
