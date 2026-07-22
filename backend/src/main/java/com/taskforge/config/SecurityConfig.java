@@ -1,5 +1,7 @@
 package com.taskforge.config;
 
+import com.taskforge.auth.ApiKeyAuthenticationFilter;
+import com.taskforge.auth.ApiKeyService;
 import com.taskforge.auth.JwtAuthenticationFilter;
 import com.taskforge.auth.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -64,7 +66,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtService jwtService;
+    private final JwtService    jwtService;
+    private final ApiKeyService apiKeyService;
 
     // ── Security filter chain ─────────────────────────────────────────────────
 
@@ -98,10 +101,12 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
 
-            // ── Register our JWT filter ───────────────────────────────────────
-            // Runs BEFORE Spring's default UsernamePasswordAuthenticationFilter.
-            // JwtAuthenticationFilter sets the SecurityContext principal to the userId UUID.
-            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+            // ── Register our auth filters ─────────────────────────────────────
+            // ApiKeyAuthenticationFilter runs first: handles "Authorization: ApiKey ..." headers.
+            // JwtAuthenticationFilter runs second:   handles "Authorization: Bearer ..." headers.
+            // Each filter short-circuits if its own prefix is not present.
+            .addFilterBefore(apiKeyAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(jwtAuthenticationFilter(), ApiKeyAuthenticationFilter.class);
 
         return http.build();
     }
@@ -120,6 +125,16 @@ public class SecurityConfig {
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
         return new JwtAuthenticationFilter(jwtService);
+    }
+
+    /**
+     * Creates the {@link ApiKeyAuthenticationFilter} bean.
+     * Same pattern as jwtAuthenticationFilter — explicit instantiation prevents
+     * Spring Boot from auto-registering it in the Servlet chain (double execution).
+     */
+    @Bean
+    public ApiKeyAuthenticationFilter apiKeyAuthenticationFilter() {
+        return new ApiKeyAuthenticationFilter(apiKeyService);
     }
 
     /**
