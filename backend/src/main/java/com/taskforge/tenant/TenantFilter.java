@@ -35,9 +35,13 @@ import java.util.UUID;
  *       │  → RLS policy reads session variable, filters rows automatically
  * </pre>
  *
- * <p><b>Phase 2 note:</b> The {@code X-Tenant-ID} header is a placeholder for local
- * development and testing. In Phase 2, the JWT authentication filter will run BEFORE
- * this filter and populate the tenant ID from the token's claims instead.
+ * <p><b>Phase 2 status:</b> The {@link com.taskforge.auth.JwtAuthenticationFilter}
+ * now runs INSIDE Spring Security's chain (before this filter in the overall order)
+ * and sets the tenant context directly from the JWT {@code tenantId} claim.
+ * This filter acts as a fallback: if {@code X-Tenant-ID} is present (e.g., in
+ * integration tests or dev tooling), it will set the context. For normal
+ * API calls with a Bearer token, the JWT filter already set it and this filter
+ * is effectively a no-op (the header won't be present).
  *
  * <p><b>Thread-pool safety:</b> The {@code finally} block that calls
  * {@code TenantContextHolder.clear()} is CRITICAL. Without it, a pooled thread that

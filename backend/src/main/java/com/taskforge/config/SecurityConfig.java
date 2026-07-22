@@ -1,57 +1,143 @@
 package com.taskforge.config;
 
+import com.taskforge.auth.JwtAuthenticationFilter;
+import com.taskforge.auth.JwtService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * SecurityConfig — Minimal Spring Security configuration
+ * SecurityConfig — Phase 2: Full JWT authentication and RBAC configuration.
  *
- * <p><b>Current state (Phase 1):</b>
- * Spring Security is on the classpath (required by Phase 2), but full JWT
- * authentication is not implemented yet. This configuration temporarily permits
- * all requests so that the application starts and Flyway migrations run cleanly.
- *
- * <p><b>Phase 2 change:</b>
- * Replace {@code .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())} with
- * proper JWT authentication rules and role-based access control.
- *
- * <p>We explicitly disable:
+ * <p><b>What changed from Phase 1:</b>
+ * The {@code permitAll()} placeholder is replaced with:
  * <ul>
- *   <li><b>CSRF</b> — REST APIs using stateless JWT don't need CSRF protection.</li>
- *   <li><b>Session creation</b> — JWT is stateless; no server-side HTTP session needed.</li>
- *   <li><b>Form login</b> — Not used; auth is via {@code /auth/login} REST endpoint.</li>
- *   <li><b>HTTP Basic</b> — Not used; auth is via Bearer token in Phase 2.</li>
+ *   <li>A {@link JwtAuthenticationFilter} registered before Spring Security's default
+ *       {@link UsernamePasswordAuthenticationFilter}</li>
+ *   <li>Explicit public/protected route rules via {@code authorizeHttpRequests}</li>
+ *   <li>A {@link PasswordEncoder} bean (BCrypt) used by {@link com.taskforge.auth.AuthService}</li>
+ *   <li>{@link EnableMethodSecurity} — activates {@code @PreAuthorize} on controller and
+ *       service methods for fine-grained RBAC (Goal 9)</li>
  * </ul>
+ *
+ * <p><b>Filter chain order (Phase 2):</b>
+ * <pre>
+ *   [Servlet filter chain — registered via FilterRegistrationBean]
+ *     Order 5  → TenantFilter (Phase 1 — reads X-Tenant-ID header as fallback)
+ *     Order 10 → Spring Security FilterChainProxy (this config)
+ *                  └─ JwtAuthenticationFilter  ← our filter, runs first inside Security chain
+ *                  └─ UsernamePasswordAuthenticationFilter (Spring default — skipped, no form login)
+ *                  └─ ExceptionTranslationFilter
+ *                  └─ AuthorizationFilter (enforces authorizeHttpRequests rules)
+ * </pre>
+ *
+ * <p><b>Why addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)?</b>
+ * Spring Security's filter chain has a fixed internal order. By placing our JWT filter
+ * before the default username/password filter, we ensure the SecurityContext is populated
+ * with the JWT principal BEFORE Spring's authorization logic runs.
+ *
+ * <p><b>@EnableMethodSecurity:</b>
+ * Enables {@code @PreAuthorize("hasRole('ADMIN')")} on individual controller methods.
+ * This is the RBAC mechanism — not all routes are listed in {@code authorizeHttpRequests}
+ * (that would be too coarse), but each sensitive endpoint gets its own annotation.
+ * Phase 3 will use this on project/task endpoints. Phase 2 uses it on audit log and
+ * admin-only endpoints.
+ *
+ * <p><b>PasswordEncoder:</b>
+ * Defined here as a {@code @Bean} so it can be injected into {@link com.taskforge.auth.AuthService}
+ * without creating a circular dependency (AuthService → PasswordEncoder → SecurityConfig would
+ * be circular if SecurityConfig also depended on AuthService). The encoder is stateless so a
+ * single bean is fine.
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final JwtService jwtService;
+
+    // ── Security filter chain ─────────────────────────────────────────────────
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            // Disable CSRF — stateless REST API with JWT doesn't need it
+            // Stateless REST API — no CSRF, no session, no form login, no HTTP Basic
             .csrf(AbstractHttpConfigurer::disable)
-
-            // Stateless — no HTTP session; every request must carry credentials (JWT in Phase 2)
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-            // Disable form-based login (we use REST endpoints)
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .formLogin(AbstractHttpConfigurer::disable)
-
-            // Disable HTTP Basic auth
             .httpBasic(AbstractHttpConfigurer::disable)
 
-            // ── Phase 1: permit all so the app boots without JWT auth ──────────
-            // TODO Phase 2: Replace with JWT filter + role-based rules
-            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());   // temprory allow all request while building
+            // ── Route access rules ────────────────────────────────────────────
+            // Ordered from most-specific to least-specific.
+            // Fine-grained RBAC (ADMIN vs MANAGER vs MEMBER etc.) is handled per-endpoint
+            // via @PreAuthorize annotations, not here (would be too coarse-grained here).
+            .authorizeHttpRequests(auth -> auth
+                // Public auth endpoints — no token required
+                .requestMatchers(
+                    "/auth/signup",
+                    "/auth/login",
+                    "/auth/refresh"
+                ).permitAll()
+
+                // Actuator health check — no token required (used by Docker/load balancer)
+                .requestMatchers("/actuator/health").permitAll()
+
+                // Everything else requires a valid JWT
+                // The JwtAuthenticationFilter populates the SecurityContext;
+                // if the token is missing or invalid, this rule returns 401.
+                .anyRequest().authenticated()
+            )
+
+            // ── Register our JWT filter ───────────────────────────────────────
+            // Runs BEFORE Spring's default UsernamePasswordAuthenticationFilter.
+            // JwtAuthenticationFilter sets the SecurityContext principal to the userId UUID.
+            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
+
+    // ── Beans ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Creates the {@link JwtAuthenticationFilter} bean.
+     *
+     * <p>We instantiate it explicitly rather than using @Component on the filter
+     * to avoid Spring Boot's {@link org.springframework.boot.web.servlet.FilterRegistrationBean}
+     * auto-registering it in the Servlet filter chain (which would cause it to run twice —
+     * once in the Servlet chain and once inside the Security chain). Explicit instantiation
+     * here means Spring Security manages it; Boot does not auto-register it.
+     */
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter(jwtService);
+    }
+
+    /**
+     * BCrypt password encoder — the industry-standard algorithm for password hashing.
+     *
+     * <p><b>Why BCrypt?</b>
+     * <ul>
+     *   <li>Adaptive work factor (rounds) — can be increased as hardware gets faster</li>
+     *   <li>Built-in salt — each hash is unique even for identical passwords</li>
+     *   <li>Intentionally slow — makes brute-force and rainbow-table attacks expensive</li>
+     * </ul>
+     *
+     * <p>Default strength is 10 rounds (2^10 = 1024 iterations) — adequate for most
+     * use cases. Increase to 12 for higher-security production environments.
+     */
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 }
+

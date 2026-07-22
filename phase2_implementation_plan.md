@@ -690,8 +690,8 @@ public class ApiKeyService {
 | Goal 3 | RefreshToken + ApiKey entities + repositories | ✅ |
 | Goal 4 | AuthService — signup, login, refresh, logout logic | ✅ |
 | Goal 5 | AuthController — /auth/* REST endpoints | ✅ |
-| Goal 6 | JwtAuthenticationFilter — per-request token verification | ⬜ |
-| Goal 7 | SecurityConfig upgraded — JWT rules replace permitAll() | ⬜ |
+| Goal 6 | JwtAuthenticationFilter — per-request token verification | ✅ |
+| Goal 7 | SecurityConfig upgraded — JWT rules replace permitAll() | ✅ |
 | Goal 8 | Tenant-switch endpoint — /auth/switch-tenant/{tenantId} | ⬜ |
 | Goal 9 | RBAC — @EnableMethodSecurity on + matrix in RBAC.md | ⬜ |
 | Goal 10 | API key generation, revocation, and auth filter | ⬜ |
