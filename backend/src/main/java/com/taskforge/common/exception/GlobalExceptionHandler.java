@@ -71,6 +71,41 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    // ── 404 Not Found ──────────────────────────────────────────────────────────
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ProblemDetail handleResourceNotFound(ResourceNotFoundException ex) {
+        log.warn("Resource not found: {}", ex.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Resource Not Found");
+        problem.setType(URI.create("about:blank"));
+        return problem;
+    }
+
+    // ── 409 Conflict — Optimistic Lock ─────────────────────────────────────────
+
+    @ExceptionHandler(OptimisticLockConflictException.class)
+    public ProblemDetail handleOptimisticLock(OptimisticLockConflictException ex) {
+        log.warn("Optimistic lock conflict: {}", ex.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Concurrent Modification Conflict");
+        problem.setType(URI.create("about:blank"));
+        problem.setProperty("hint", "Fetch the latest task version and retry the request.");
+        return problem;
+    }
+
+    // ── 422 Unprocessable Entity — Invalid Status Transition ───────────────────
+
+    @ExceptionHandler(InvalidStatusTransitionException.class)
+    public ProblemDetail handleInvalidStatusTransition(InvalidStatusTransitionException ex) {
+        log.warn("Invalid status transition: {}", ex.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+        problem.setTitle("Invalid Status Transition");
+        problem.setType(URI.create("about:blank"));
+        return problem;
+    }
+
     // ── 403 Forbidden ─────────────────────────────────────────────────────────
 
     @ExceptionHandler(TenantAccessDeniedException.class)
@@ -78,6 +113,15 @@ public class GlobalExceptionHandler {
         log.warn("Tenant access denied: {}", ex.getMessage());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
         problem.setTitle("Access Denied");
+        problem.setType(URI.create("about:blank"));
+        return problem;
+    }
+
+    @ExceptionHandler(CommentAccessDeniedException.class)
+    public ProblemDetail handleCommentAccessDenied(CommentAccessDeniedException ex) {
+        log.warn("Comment access denied: {}", ex.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problem.setTitle("Comment Access Denied");
         problem.setType(URI.create("about:blank"));
         return problem;
     }

@@ -7,3 +7,5 @@
 • Implemented refresh token rotation with SHA-256 hashing (zero plaintext storage) + logout-everywhere
   bulk revocation; RBAC enforced via 7 @PreAuthorize annotations (Admin/Manager/Member/Viewer matrix)
   across API key and tenant management endpoints"
+
+3. "Built multi-tenant SaaS backend (Java 21, Spring Boot 3, PostgreSQL 16) with Row-Level Security enforcing tenant isolation across 27 REST endpoints and 81 automated tests."
