@@ -1,1 +1,9 @@
 1."Architected a multi-tenant SaaS backend (Java 21, Spring Boot 3, PostgreSQL 16) with row-level security enforced at the database layer — verified by 17 RLS integration test assertions across 4 tenant isolation scenarios, spanning 13 RLS-protected tables defined in 7 Flyway migrations, confirming zero cross-tenant data leakage even with absent WHERE clauses."
+
+
+2. "• Architected stateless JWT authentication for a multi-tenant SaaS platform using Spring Security 6,
+  implementing dual-auth (Bearer token + API key) with a 2-filter security pipeline;
+  45/45 unit tests pass across 4 test suites
+• Implemented refresh token rotation with SHA-256 hashing (zero plaintext storage) + logout-everywhere
+  bulk revocation; RBAC enforced via 7 @PreAuthorize annotations (Admin/Manager/Member/Viewer matrix)
+  across API key and tenant management endpoints"
